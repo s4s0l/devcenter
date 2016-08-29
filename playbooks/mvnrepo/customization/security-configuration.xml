@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<security-configuration>
+  <version>2.0.8</version>
+  <anonymousUsername>anonymous</anonymousUsername>
+  <anonymousPassword>{2cdCaOGuYXQHP8qj6GXOS8zXevCVXQpOzD/l2uXSV6Q=}</anonymousPassword>
+  <realms>
+    <realm>XmlAuthorizingRealm</realm>
+    <realm>LdapAuthenticatingRealm</realm>
+  </realms>
+  <hashIterations>1024</hashIterations>
+</security-configuration>

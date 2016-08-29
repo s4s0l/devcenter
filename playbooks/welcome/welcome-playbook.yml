@@ -1,0 +1,32 @@
+---
+
+- copy: src=/vagrant/playbooks/welcome/page/css dest=/ansible-tmp/welcome/page/ force=no
+- copy: src=/vagrant/playbooks/welcome/page/fonts dest=/ansible-tmp/welcome/page/ force=no
+- copy: src=/vagrant/playbooks/welcome/page/js dest=/ansible-tmp/welcome/page/ force=no
+- template: src=/vagrant/playbooks/welcome/page/index.html dest=/ansible-tmp/welcome/page/index.html
+
+- name: Welcome Page containers up
+  docker_service:
+    project_name: welcome
+    build: yes
+    definition:
+      version: '2'
+      services:
+        server:
+          image: pierrezemb/gostatic
+          command: --forceHTTP
+          restart: always
+          ports:
+            - "80:8043"
+          volumes:
+            - /ansible-tmp/welcome/page:/srv/http
+          extra_hosts:
+            - "{{ci_host_name}}:{{ci_host_ip}}"
+
+
+- name: Wait for www server to fully start.
+  uri: url=http://localhost:80 timeout=300 status_code=200 follow_redirects=yes
+  register: result
+  until: result['status'] == 200
+  retries: 60
+  delay: 5

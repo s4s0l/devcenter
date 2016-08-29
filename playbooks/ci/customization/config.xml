@@ -1,0 +1,124 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<hudson>
+  <disabledAdministrativeMonitors/>
+  <version>1.0</version>
+  <numExecutors>5</numExecutors>
+  <mode>NORMAL</mode>
+  <useSecurity>true</useSecurity>
+  <authorizationStrategy class="hudson.security.GlobalMatrixAuthorizationStrategy">
+    <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Create:admins</permission>
+    <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Delete:admins</permission>
+    <permission>com.cloudbees.plugins.credentials.CredentialsProvider.ManageDomains:admins</permission>
+    <permission>com.cloudbees.plugins.credentials.CredentialsProvider.Update:admins</permission>
+    <permission>com.cloudbees.plugins.credentials.CredentialsProvider.View:admins</permission>
+    <permission>hudson.model.Computer.Build:admins</permission>
+    <permission>hudson.model.Computer.Configure:admins</permission>
+    <permission>hudson.model.Computer.Connect:admins</permission>
+    <permission>hudson.model.Computer.Create:admins</permission>
+    <permission>hudson.model.Computer.Delete:admins</permission>
+    <permission>hudson.model.Computer.Disconnect:admins</permission>
+    <permission>hudson.model.Hudson.Administer:admins</permission>
+    <permission>hudson.model.Hudson.ConfigureUpdateCenter:admins</permission>
+    <permission>hudson.model.Hudson.Read:admins</permission>
+    <permission>hudson.model.Hudson.Read:developers</permission>
+    <permission>hudson.model.Hudson.RunScripts:admins</permission>
+    <permission>hudson.model.Hudson.UploadPlugins:admins</permission>
+    <permission>hudson.model.Item.Build:admins</permission>
+    <permission>hudson.model.Item.Build:developers</permission>
+    <permission>hudson.model.Item.Cancel:admins</permission>
+    <permission>hudson.model.Item.Cancel:developers</permission>
+    <permission>hudson.model.Item.Configure:admins</permission>
+    <permission>hudson.model.Item.Configure:developers</permission>
+    <permission>hudson.model.Item.Create:admins</permission>
+    <permission>hudson.model.Item.Create:developers</permission>
+    <permission>hudson.model.Item.Delete:admins</permission>
+    <permission>hudson.model.Item.Delete:developers</permission>
+    <permission>hudson.model.Item.Discover:admins</permission>
+    <permission>hudson.model.Item.Discover:developers</permission>
+    <permission>hudson.model.Item.Read:admins</permission>
+    <permission>hudson.model.Item.Read:developers</permission>
+    <permission>hudson.model.Item.Workspace:admins</permission>
+    <permission>hudson.model.Item.Workspace:developers</permission>
+    <permission>hudson.model.Run.Delete:admins</permission>
+    <permission>hudson.model.Run.Delete:developers</permission>
+    <permission>hudson.model.Run.Replay:admins</permission>
+    <permission>hudson.model.Run.Replay:developers</permission>
+    <permission>hudson.model.Run.Update:admins</permission>
+    <permission>hudson.model.Run.Update:developers</permission>
+    <permission>hudson.model.View.Configure:admins</permission>
+    <permission>hudson.model.View.Configure:developers</permission>
+    <permission>hudson.model.View.Create:admins</permission>
+    <permission>hudson.model.View.Create:developers</permission>
+    <permission>hudson.model.View.Delete:admins</permission>
+    <permission>hudson.model.View.Delete:developers</permission>
+    <permission>hudson.model.View.Read:admins</permission>
+    <permission>hudson.model.View.Read:developers</permission>
+    <permission>hudson.scm.SCM.Tag:admins</permission>
+    <permission>hudson.scm.SCM.Tag:developers</permission>
+  </authorizationStrategy>
+  <securityRealm class="hudson.security.LDAPSecurityRealm" plugin="ldap@1.12">
+    <server>ldap://{{ ci_host_name }}:4000</server>
+    <rootDN>dc={{ ci_host_name }}</rootDN>
+    <inhibitInferRootDN>false</inhibitInferRootDN>
+    <userSearchBase>ou=People</userSearchBase>
+    <userSearch>uid={0}</userSearch>
+    <groupSearchBase>ou=group</groupSearchBase>
+    <groupMembershipStrategy class="jenkins.security.plugins.ldap.FromGroupSearchLDAPGroupMembershipStrategy">
+      <filter></filter>
+    </groupMembershipStrategy>
+    <managerDN>cn=admin,dc={{ ci_host_name }}</managerDN>
+    <managerPasswordSecret>{{ initial_admin_password }}</managerPasswordSecret>
+    <disableMailAddressResolver>false</disableMailAddressResolver>
+    <displayNameAttributeName>cn</displayNameAttributeName>
+    <mailAddressAttributeName>mail</mailAddressAttributeName>
+    <userIdStrategy class="jenkins.model.IdStrategy$CaseInsensitive"/>
+    <groupIdStrategy class="jenkins.model.IdStrategy$CaseInsensitive"/>
+  </securityRealm>
+  <disableRememberMe>false</disableRememberMe>
+  <projectNamingStrategy class="jenkins.model.ProjectNamingStrategy$DefaultProjectNamingStrategy"/>
+  <workspaceDir>${JENKINS_HOME}/workspace/${ITEM_FULLNAME}</workspaceDir>
+  <buildsDir>${ITEM_ROOTDIR}/builds</buildsDir>
+  <markupFormatter class="hudson.markup.EscapedMarkupFormatter"/>
+  <jdks/>
+  <viewsTabBar class="hudson.views.DefaultViewsTabBar"/>
+  <myViewsTabBar class="hudson.views.DefaultMyViewsTabBar"/>
+  <clouds/>
+  <scmCheckoutRetryCount>0</scmCheckoutRetryCount>
+  <views>
+    <hudson.model.AllView>
+      <owner class="hudson" reference="../../.."/>
+      <name>All</name>
+      <filterExecutors>false</filterExecutors>
+      <filterQueue>false</filterQueue>
+      <properties class="hudson.model.View$PropertyList"/>
+    </hudson.model.AllView>
+  </views>
+  <primaryView>All</primaryView>
+  <slaveAgentPort>50000</slaveAgentPort>
+  <label></label>
+  <crumbIssuer class="hudson.security.csrf.DefaultCrumbIssuer">
+    <excludeClientIPFromCrumb>false</excludeClientIPFromCrumb>
+  </crumbIssuer>
+  <nodeProperties/>
+  <globalNodeProperties>
+    <hudson.slaves.EnvironmentVariablesNodeProperty>
+      <envVars serialization="custom">
+        <unserializable-parents/>
+        <tree-map>
+          <default>
+            <comparator class="hudson.util.CaseInsensitiveComparator"/>
+          </default>
+          <int>4</int>
+          <string>DOCKER_REGISTRY</string>
+          <string>{{ ci_host_name }}:5000</string>
+          <string>NEXUS_RELEASE_REPO</string>
+          <string>http://{{ ci_host_name }}:5002/content/repositories/releases/</string>
+          <string>NEXUS_SNAPSHOT_REPO</string>
+          <string>http://{{ ci_host_name }}:5002/content/repositories/snapshots/</string>
+          <string>SONAR_ADDR</string>
+          <string>http://{{ ci_host_name }}:9000</string>
+        </tree-map>
+      </envVars>
+    </hudson.slaves.EnvironmentVariablesNodeProperty>
+  </globalNodeProperties>
+</hudson>

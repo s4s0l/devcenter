@@ -1,0 +1,1 @@
+$cfg_persistent_storage_location = '/data/devcenter/persistent_storage.vdi'

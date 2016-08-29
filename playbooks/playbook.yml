@@ -1,0 +1,43 @@
+---
+- hosts: all
+  vars:
+    docker_machine_version: v0.7.0
+    docker_compose_version: 1.8.0
+    password_ldap: "{{initial_admin_password}}"
+  become: yes
+
+  pre_tasks:
+    - name: Update apt cache if needed.
+      apt: update_cache=yes cache_valid_time=3600
+
+
+
+  tasks:
+    - file: path=/ansible-tmp state=directory
+    - apt: name=nfs-kernel-server
+    - lineinfile: dest=/etc/exports regexp=^/data.* line="/data    10.10.0.0/255.255.255.0(rw,sync,no_root_squash)"
+      notify:
+          - restart nfs
+    - include: docker/docker-playbook.yml
+    - include: docker/docker-registry-playbook.yml
+    - include: ldap/ldap-playbook.yml
+    - include: mvnrepo/nexus-playbook.yml
+    - include: scm/gitlab-playbook.yml
+    - include: scm/customize-playbook.yml
+    - include: sonar/sonar-playbook.yml
+    - include: ci/jenkins-playbook.yml
+    - include: welcome/welcome-playbook.yml
+
+#     Youtrack is work in progress, don't know how to enable ldap integration via sctipting
+#    - include: youtrack/youtrack-playbook.yml
+
+    - debug: msg="Add '{{ci_host_ip}}      {{ci_host_name}}' to your /etc/hosts"
+    - debug: msg="In order to mount /data directory on your host do 'sudo apt install nfs-common' and 'sudo mount {{ ci_host_name }}:/data /data/{{ ci_host_name }}/mount/'"
+    - debug: msg="To use repo from location other than jenkins do 'sudo mkdir -p /etc/docker/certs.d/{{ci_host_name}}:5000/ && sudo cp  /data/{{ ci_host_name }}/mount/docker-registry/certs/domain.crt /etc/docker/certs.d/{{ci_host_name}}:5000/ca.crt'"
+    - debug: msg="To restore git keys, after env reset 'ssh-keygen -R [{{ ci_host_name }}]:6022 && ssh-keygen -R [{{ ci_host_ip }}]:6022 && ssh-keyscan -p 6022 {{ ci_host_ip }} >> ~/.ssh/known_hosts && ssh-keyscan -p 6022 {{ ci_host_name }} >> ~/.ssh/known_hosts' "
+    - debug: msg="Go to http://{{ci_host_name}} to continue..."
+  handlers:
+    - name: restart nfs
+      service: name=nfs-kernel-server state=restarted
+
+

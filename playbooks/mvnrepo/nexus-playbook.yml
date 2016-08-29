@@ -1,0 +1,31 @@
+---
+- file: path={{ci_host_schared_folder}}/nexus state=directory
+- file: path={{ci_host_schared_folder}}/nexus/work state=directory
+
+- file: path=/ansible-tmp/mvnrepo state=directory
+- file: path=/ansible-tmp/mvnrepo/nexus_bootstrap state=directory
+- file: path=/ansible-tmp/mvnrepo/nexus_bootstrap/conf state=directory
+- template: src=/vagrant/playbooks/mvnrepo/customization/ldap.xml dest=/ansible-tmp/mvnrepo/nexus_bootstrap/conf/ldap.xml force=no
+- template: src=/vagrant/playbooks/mvnrepo/customization/security.xml dest=/ansible-tmp/mvnrepo/nexus_bootstrap/conf/security.xml force=no
+- template: src=/vagrant/playbooks/mvnrepo/customization/security-configuration.xml dest=/ansible-tmp/mvnrepo/nexus_bootstrap/conf/security-configuration.xml force=no
+
+
+
+- name: Nexus Maven repository containers up
+  docker_service:
+    project_name: mvnrepo
+    build: yes
+    definition:
+      version: '2'
+      services:
+        nexus:
+          build:
+            context: /vagrant/playbooks/mvnrepo/dockerization
+          restart: always
+          ports:
+            - "5002:8081"
+          volumes:
+            - "{{ci_host_schared_folder}}/nexus/work:/sonatype-work"
+            - "/ansible-tmp/mvnrepo/nexus_bootstrap:/nexus_bootstrap"
+          extra_hosts:
+            - "{{ci_host_name}}:{{ci_host_ip}}"

@@ -1,0 +1,50 @@
+---
+- file: path={{ci_host_schared_folder}}/ci state=directory
+- file: path={{ci_host_schared_folder}}/ci/home state=directory
+- file: path={{ci_host_schared_folder}}/ci/home/.ssh state=directory
+- shell: cp /ansible-tmp/git/git_jenkins_keys/id_rsa {{ci_host_schared_folder}}/ci/home/.ssh
+  args:
+      creates: "{{ci_host_schared_folder}}/ci/home/.ssh/id_rsa"
+- file: path={{ci_host_schared_folder}}/ci/home/.ssh/id_rsa mode=0500
+- shell: cp /ansible-tmp/git/git_jenkins_keys/id_rsa.pub {{ci_host_schared_folder}}/ci/home/.ssh
+  args:
+      creates: "{{ci_host_schared_folder}}/ci/home/.ssh/id_rsa.pub"
+- file: path={{ci_host_schared_folder}}/ci/home/.ssh/id_rsa.pub mode=0500
+
+- file: path={{ci_host_schared_folder}}/ci/home/jobs/sample-java-project/ state=directory
+- template: src=/vagrant/playbooks/ci/customization/config.xml dest={{ci_host_schared_folder}}/ci/home/config.xml force=no
+- template: src=/vagrant/playbooks/ci/customization/credentials.xml dest={{ci_host_schared_folder}}/ci/home/credentials.xml force=no
+- template: src=/vagrant/playbooks/ci/customization/hudson.plugins.git.GitSCM.xml dest={{ci_host_schared_folder}}/ci/home/hudson.plugins.git.GitSCM.xml force=no
+- template: src=/vagrant/playbooks/ci/customization/jobs/sample-java-project/config.xml dest={{ci_host_schared_folder}}/ci/home/jobs/sample-java-project/config.xml force=no
+
+- name: Jenkins containers up
+  docker_service:
+    project_name: ci
+    build: yes
+    definition:
+      version: '2'
+      services:
+        jenkins:
+          build:
+            context: /vagrant/playbooks/ci/dockerization
+          restart: always
+          environment:
+            - JAVA_OPTS=-Dhudson.footerURL=http://{{ ci_host_name }} -Djava.util.logging.config.file=/var/jenkins_home/log.properties
+          ports:
+            - "7001:50000"
+            - "7080:8080"
+          volumes:
+            - "{{ci_host_schared_folder}}/ci/home:/var/jenkins_home"
+            - /var/run/docker.sock:/var/run/docker.sock
+          extra_hosts:
+            -  "{{ci_host_name}}:{{ci_host_ip}}"
+- name: Wait for jenkins to open port
+  wait_for: port=7080 host=localhost connect_timeout=60 timeout=300
+
+- name: Wait for jenkins to fully start - it can take a while....
+  uri: url=http://localhost:7080/login timeout=300 status_code=200 follow_redirects=yes
+  register: result
+  until: result['status'] == 200
+  retries: 60
+  delay: 5
+

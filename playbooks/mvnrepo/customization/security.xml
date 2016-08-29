@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<security>
+  <version>2.0.5</version>
+  <roles>
+    <role>
+      <id>admins</id>
+      <name>admins</name>
+      <description>External mapping for admins (LDAP)</description>
+      <roles>
+        <role>nx-admin</role>
+      </roles>
+    </role>
+    <role>
+      <id>developers</id>
+      <name>developers</name>
+      <description>External mapping for developers (LDAP)</description>
+      <roles>
+        <role>repo-all-full</role>
+        <role>nx-developer</role>
+        <role>nx-deployment</role>
+      </roles>
+    </role>
+  </roles>
+</security>

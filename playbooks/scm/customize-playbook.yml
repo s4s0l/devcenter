@@ -1,0 +1,234 @@
+---
+- file: path=/ansible-tmp/git/git_jenkins_keys state=directory
+- shell: ssh-keygen -t rsa -C "jenkins@{{ ci_host_name }}" -N "" -f /ansible-tmp/git/git_jenkins_keys/id_rsa
+  args:
+      creates: /ansible-tmp/git/git_jenkins_keys/id_rsa
+
+
+
+- uri:
+    url: "http://localhost:6080/api/v3/session"
+    method: POST
+    return_content: yes
+    status_code: 201
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "login=root&password={{ initial_admin_password }}"
+  register: admin_token
+  when: true
+  until: admin_token['status'] == 201
+  retries: 60
+  delay: 5
+
+- debug: msg={{ admin_token.json.private_token }}
+
+- name: check if jenkins present
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users?username=jenkins
+    method: GET
+    return_content: yes
+    status_code: 200
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: jenkins_present
+  when: true
+
+- name: Import jenkins user so we can work on him
+  uri:
+    url: "http://localhost:6080/api/v3/users"
+    method: POST
+    return_content: yes
+    status_code: 201
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "email=jenkins@{{ ci_host_name }}&password=EYR0r5UqsCsX3qtvjVGtX942yFSqcY8&username=jenkins&name=Mr Jenkins"
+  when: "jenkins_present.json|length == 0"
+  register: ret
+  changed_when: ret.status == 201
+
+
+- name: get Jenkins user
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users?username=jenkins
+    method: GET
+    return_content: yes
+    status_code: 200
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: jenkins_user
+  when: true
+
+- debug: msg="Jenkins user ID:{{ jenkins_user.json[0].id }}"
+
+- name: get Jenkins keys
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users/{{ jenkins_user.json[0].id }}/keys
+    method: GET
+    return_content: yes
+    status_code: 200
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: jenkins_keys
+  when: true
+
+- debug: msg="Jenkins keys count {{ jenkins_keys.json | length }}"
+
+- name: Import jenkins key for later usage
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users/{{ jenkins_user.json[0].id }}/keys
+    method: POST
+    return_content: yes
+    status_code: 201
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "title=JenkinsKey&key={{ lookup('file','/ansible-tmp/git/git_jenkins_keys/id_rsa.pub') | urlencode() }}"
+  when: "jenkins_keys.json|length == 0"
+  register: ret
+  changed_when: ret.status == 201
+
+
+
+- name: Check if sample project exists in jenkins
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/projects/jenkins%2Fsample-java-project
+    method: GET
+    return_content: yes
+    status_code: 200,404
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: sample_java_project
+  when: true
+
+
+- debug: msg="Status returned {{sample_java_project.status}}"
+
+- name: Create sample java project in git
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3//projects/user/{{ jenkins_user.json[0].id }}
+    method: POST
+    return_content: yes
+    status_code: 201
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "name=sample-java-project"
+  when: sample_java_project.status == 404
+  register: ret
+  changed_when: ret.status == 201
+
+- name: Check if sample has project commited into
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/projects/jenkins%2Fsample-java-project/events
+    method: GET
+    return_content: yes
+    status_code: 200
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: sample_java_project_events
+  when: true
+
+- name: Checking out sample project (no git module because it cannot push anyway)
+  shell: >
+    rm -Rf /ansible-tmp/git/sample-java-project
+    && git config --global user.name "Mr Jenkins"
+    && git config --global user.email "jenkins@{{ ci_host_name }}"
+    && mkdir -p ~/.ssh
+    && ssh-keyscan -p 6022 {{ ci_host_name }} >> ~/.ssh/known_hosts
+    && ssh-agent bash -c 'ssh-add /ansible-tmp/git/git_jenkins_keys/id_rsa; git -c http.sslVerify=false clone ssh://git@{{ ci_host_name }}:6022/jenkins/sample-java-project.git /ansible-tmp/git/sample-java-project'
+  when: sample_java_project_events.json  | length == 1
+
+- name: Importing sample project
+  shell: >
+    cp -Rf /vagrant/playbooks/scm/sample-java-project/* /ansible-tmp/git/sample-java-project
+    && cp -Rf /vagrant/playbooks/scm/sample-java-project/.gitignore /ansible-tmp/git/sample-java-project
+    && git --git-dir=/ansible-tmp/git/sample-java-project/.git/ --work-tree=/ansible-tmp/git/sample-java-project/ add .
+    && git --git-dir=/ansible-tmp/git/sample-java-project/.git/ --work-tree=/ansible-tmp/git/sample-java-project/ commit -m "Initial commit from ansible"
+    && ssh-agent bash -c 'ssh-add /ansible-tmp/git/git_jenkins_keys/id_rsa; git --git-dir=/ansible-tmp/git/sample-java-project/.git/ --work-tree=/ansible-tmp/git/sample-java-project/ -c http.sslVerify=false push origin master'
+  when: sample_java_project_events.json  | length == 1
+
+
+
+
+
+
+- name: check if {{ initial_developer }} present
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users?username={{ initial_developer }}
+    method: GET
+    return_content: yes
+    status_code: 200
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: dev_present
+  when: true
+
+- name: Import {{ initial_developer }} user so we can work on him
+  uri:
+    url: "http://localhost:6080/api/v3/users"
+    method: POST
+    return_content: yes
+    status_code: 201
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "email={{ initial_developer_email }}&password=EYR0r5UqsCsX3qtvjVGtX942yFSqcY8&username={{ initial_developer }}&name=Mr {{ initial_developer }}"
+  when: "dev_present.json|length == 0"
+  register: ret
+  changed_when: ret.status == 201
+
+
+- name: get {{ initial_developer }} user
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users?username={{ initial_developer }}
+    method: GET
+    return_content: yes
+    status_code: 200
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: dev_user
+  when: true
+
+- debug: msg="{{ initial_developer }} user ID:{{ dev_user.json[0].id }}"
+
+- name: get {{ initial_developer }} keys
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users/{{ dev_user.json[0].id }}/keys
+    method: GET
+    return_content: yes
+    status_code: 200
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: dev_keys
+  when: true
+
+- debug: msg="{{ initial_developer }} keys count {{ dev_keys.json | length }}"
+
+- name: Import {{ initial_developer }} key for later usage
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/users/{{ dev_user.json[0].id }}/keys
+    method: POST
+    return_content: yes
+    status_code: 201
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "title=DevKey&key={{ lookup('file','/vagrant/.tmp/id_rsa.pub') | urlencode() }}"
+  when: "dev_keys.json|length == 0"
+  register: ret
+  changed_when: ret.status == 201
+
+
+
+
+- name: Check if  {{ initial_developer }} is in sample project
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/projects/jenkins%2Fsample-java-project/members/{{dev_user.json[0].id}}
+    method: GET
+    return_content: yes
+    status_code: 200,404
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+  register: proj_members
+  when: true
+
+
+- name: Add {{ initial_developer }} to sample project
+  uri:
+    url: http://{{ ci_host_name }}:6080/api/v3/projects/jenkins%2Fsample-java-project/members
+    method: POST
+    return_content: yes
+    status_code: 201
+    HEADER_PRIVATE-TOKEN: "{{ admin_token.json.private_token}}"
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "user_id={{dev_user.json[0].id}}&access_level=40"
+  when: "proj_members['status'] == 404"
+  register: ret
+  changed_when: ret.status == 201
+

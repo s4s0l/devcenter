@@ -1,0 +1,40 @@
+---
+- file: path={{ci_host_schared_folder}}/git state=directory
+- file: path={{ci_host_schared_folder}}/git/config state=directory
+- file: path={{ci_host_schared_folder}}/git/data state=directory
+- template: src=/vagrant/playbooks/scm/gitlab.rb dest={{ci_host_schared_folder}}/git/config/gitlab.rb force=no
+- name: Gitlab containers up
+  docker_service:
+    project_name: scm
+    build: yes
+    definition:
+      version: '2'
+      services:
+        gitlab:
+          image: gitlab/gitlab-ce:latest
+          restart: always
+          environment:
+            - GITLAB_OMNIBUS_CONFIG="external_url 'http://{{ ci_host_name }}:6080'"
+            - GITLAB_ROOT_PASSWORD={{password_ldap}}
+              # Add any other gitlab.rb configuration here, each on its own line
+          ports:
+            - "6080:80"
+            - "6443:443"
+            - "6022:22"
+          volumes:
+             - "{{ci_host_schared_folder}}/git/config:/etc/gitlab"
+             - "{{ci_host_schared_folder}}/git/data:/var/opt/gitlab"
+#            - '/srv/gitlab/data:/var/opt/gitlab'
+#            - '/srv/gitlab/logs:/var/log/gitlab'
+          extra_hosts:
+            - "{{ci_host_name}}:{{ci_host_ip}}"
+- name: Wait for git to open port
+  wait_for: port=6080 host=localhost connect_timeout=60 timeout=300
+
+- name: Wait for git to fully start - it can take a while....
+  uri: url=http://localhost:6080 timeout=300 status_code=500,200,302 follow_redirects=no
+  register: result
+  until: result['status'] == 302
+  retries: 60
+  delay: 5
+

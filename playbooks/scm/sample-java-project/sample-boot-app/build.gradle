@@ -1,0 +1,72 @@
+apply plugin: 'java'
+apply plugin: 'spring-boot'
+apply plugin: "jacoco"
+
+dependencies {
+    compile("org.springframework.boot:spring-boot-starter-web")
+    testCompile 'junit:junit'
+}
+
+apply plugin: 'docker'
+docker {
+    maintainer = 'Mr Jenkins <jenkins@devcenter>'
+}
+task buildDocker(type: Docker, dependsOn: build) {
+    push = true
+    applicationName = project.name
+    registry = project.property("upload.repository.docker")
+    dockerfile = file('src/main/docker/Dockerfile')
+    doFirst {
+        copy {
+            from jar
+            into stageDir
+            rename { 'app.jar' }
+        }
+    }
+}
+
+
+
+apply plugin: 'docker-compose'
+dockerCompose {
+    useComposeFiles = ['src/test/docker/docker4test-sample/docker-compose.yml']
+    // like 'docker-compose -f
+    removeContainers = true
+    isRequiredBy test
+}
+
+test.doFirst {
+    dockerCompose.exposeAsEnvironment(test)
+    dockerCompose.exposeAsSystemProperties(test)
+    def webInfo = dockerCompose.servicesInfos.web
+    // pass host and exposed TCP port 80 as custom-named Java System properties
+    systemProperty 'myweb.host', webInfo.host
+    systemProperty 'myweb.port', webInfo.ports[80]
+}
+
+//because upload depends onl;y on package?
+uploadArchives.dependsOn bootRepackage
+uploadArchives.dependsOn buildDocker
+//Because we use boot plugin we have give versions for dependencies in pom
+// see http://docs.spring.io/spring-boot/docs/current/reference/html/build-tool-plugins-gradle-plugin.html#build-tool-plugins-gradle-publishing-artifacts-to-a-maven-repository-import
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            pom {
+                project {
+                    dependencyManagement {
+                        dependencies {
+                            dependency {
+                                groupId "io.spring.platform"
+                                artifactId "platform-bom:2.0.6.RELEASE"
+                                version "2.0.6.RELEASE"
+                                type "pom"
+                                scope "import"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

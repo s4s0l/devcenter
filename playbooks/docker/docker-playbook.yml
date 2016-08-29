@@ -1,0 +1,64 @@
+---
+- name: docker apt key
+  apt_key: url=https://get.docker.com/gpg state=present
+- name: docker install
+  shell: >
+    curl -sSL https://get.docker.com/ | sh
+    && sed -i 's/GRUB_CMDLINE_LINUX=""/GRUB_CMDLINE_LINUX="cgroup_enable=memory swapaccount=1"/' /etc/default/grub
+    &&  update-grub
+  args:
+    creates: /usr/bin/docker
+
+# next part usefull for linking data outside container (does not work with mmap - see mongo openldap)
+#
+#- name: check the current volumes symlink
+#  stat: path=/var/lib/docker/volumes
+#  register: sites_available
+#
+#- name: move volumes contents
+#  shell: mv /var/lib/docker/volumes/* /docker_volumes/
+#  when: sites_available.stat.isdir is defined and sites_available.stat.isdir
+#  args:
+#    creates: /docker_volumes/metadata.db
+#
+#- name: remove the volumes folder (only if it is a folder)
+#  file: path=/var/lib/docker/volumes state=absent
+#  when: sites_available.stat.isdir is defined and sites_available.stat.isdir
+#
+#- name: link volumes
+#  file: src=/docker_volumes dest=/var/lib/docker/volumes state=link
+########################################################################################
+
+
+
+- group: name=docker state=present
+- user: name=vagrant groups=docker append=yes
+- apt: name=python-pip
+- pip: name=pip state=latest
+- pip: name=docker-py
+- pip: name=docker-compose
+- service: name=docker enabled=yes state=started
+
+- name: Docker Compose install
+  get_url: >
+      url=https://github.com/docker/compose/releases/download/{{docker_compose_version }}/docker-compose-Linux-x86_64
+      dest=/usr/local/bin/docker-compose
+      mode=a+x
+
+- name: Docker Compose bash completion install
+  get_url: >
+      url=https://raw.githubusercontent.com/docker/compose/{{docker_compose_version}}/contrib/completion/bash/docker-compose
+      dest=/etc/bash_completion.d/docker-compose
+- name: Docker Machine install
+  get_url: >
+      url=https://github.com/docker/machine/releases/download/{{docker_machine_version}}/docker-machine-Linux-x86_64
+      dest=/usr/local/bin/docker-machine
+      mode=a+x
+- name: Docker Machine bash wrapper install
+  get_url: >
+      url=https://raw.githubusercontent.com/docker/machine/{{docker_machine_version}}/contrib/completion/bash/docker-machine-wrapper.bash
+      dest=/etc/bash_completion.d/docker-machine-wrapper
+- name: Docker Machine bash completion install
+  get_url: >
+      url=https://raw.githubusercontent.com/docker/machine/{{docker_machine_version}}/contrib/completion/bash/docker-machine.bash
+      dest=/etc/bash_completion.d/docker-machine

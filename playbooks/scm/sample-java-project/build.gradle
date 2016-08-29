@@ -1,0 +1,56 @@
+
+
+buildscript {
+    repositories {
+        jcenter()
+        maven {
+            url "https://plugins.gradle.org/m2/"
+        }
+    }
+    dependencies {
+        classpath 'io.spring.gradle:dependency-management-plugin:0.6.0.RELEASE'
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.3.6.RELEASE")
+        classpath "com.avast.gradle:docker-compose-gradle-plugin:0.3.7"
+        classpath('se.transmode.gradle:gradle-docker:1.2')
+        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:2.0.1"
+        classpath 'net.researchgate:gradle-release:2.4.0'
+    }
+}
+apply plugin: "org.sonarqube"
+
+allprojects {
+    group 'org.betelgeuse.ci.sample'
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+
+    repositories {
+        jcenter()
+    }
+    ext['bouncycastle.version'] = '1.54'
+    dependencyManagement {
+        imports {
+            mavenBom 'io.spring.platform:platform-bom:2.0.6.RELEASE'
+        }
+    }
+
+    apply plugin: 'maven'
+    uploadArchives {
+        repositories {
+            mavenDeployer {
+                repository(url: project.property("upload.repository.release")) {
+                    authentication(userName: project.property("upload.user"), password: project.property("upload.password"))
+                }
+                snapshotRepository(url: project.property("upload.repository.snapshot")) {
+                    authentication(userName: project.property("upload.user"), password: project.property("upload.password"));
+                }
+            }
+        }
+    }
+}
+
+apply plugin: 'net.researchgate.release'
+subprojects.each {subpr ->
+    afterReleaseBuild.dependsOn subpr.uploadArchives
+}
+
+

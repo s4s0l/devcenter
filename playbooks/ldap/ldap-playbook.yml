@@ -1,0 +1,73 @@
+---
+- apt: name=slapd
+- apt: name=ldap-utils
+- file: path={{ci_host_schared_folder}}/ldap state=directory
+- file: path={{ci_host_schared_folder}}/ldap/lam state=directory
+- file: path={{ci_host_schared_folder}}/ldap/data state=directory
+- file: path={{ci_host_schared_folder}}/ldap/config state=directory
+- file: path=/ansible-tmp/ldap state=directory
+- template: src=/vagrant/playbooks/ldap/customization/lam.conf dest=/ansible-tmp/ldap/lam.conf force=no
+- copy: src=/vagrant/playbooks/ldap/customization/users.ldif dest=/ansible-tmp/ldap/users.ldif force=no
+
+- name: Ldap containers up
+  docker_service:
+    project_name: ldap
+    build: yes
+    definition:
+      version: '2'
+      volumes:
+        ldap_config:
+        ldap_data:
+      services:
+        server:
+          image: dinkel/openldap
+          restart: always
+          ports:
+            - "4000:389"
+          volumes:
+            - "{{ci_host_schared_folder}}/ldap/config:/etc/ldap"
+            - "{{ci_host_schared_folder}}/ldap/data:/var/lib/ldap"
+          environment:
+            - SLAPD_PASSWORD={{password_ldap}}
+            - SLAPD_DOMAIN={{ci_host_name}}
+        ui:
+          build:
+            context: /vagrant/playbooks/ldap/dockerization
+          restart: always
+          ports:
+            - "4001:80"
+          volumes:
+            - "{{ci_host_schared_folder}}/ldap/lam:/var/lib/ldap-account-manager/config"
+            - "/ansible-tmp/ldap/lam.conf:/lam_bootstrap/lam.conf"
+          extra_hosts:
+            - "{{ci_host_name}}:{{ci_host_ip}}"
+- stat: path=/ansible-tmp/ldap/users.ldif_imported
+  register: marker
+- name: Wait for Ldap server to open port
+  wait_for: port=4000 host=localhost connect_timeout=30
+  when: marker.stat.exists != true
+#TODO: change in file hostname, passwords so on to be customizable
+
+- shell: docker exec ldap_server_1 slappasswd -h {SSHA} -s {{ initial_developer_password }}
+  register: dev_pass_hash
+  when: marker.stat.exists != true
+
+- shell: docker exec ldap_server_1 slappasswd -h {SSHA} -s {{ initial_admin_password }}
+  register: admin_pass_hash
+  when: marker.stat.exists != true
+
+- replace: dest=/ansible-tmp/ldap/users.ldif regexp="{{ item.var }}" replace="{{ item.val }}"
+  with_items:
+     - { var: '__DOMAIN__', val: "{{ ci_host_name }}" }
+     - { var: '__DEV_LOGIN__', val: "{{ initial_developer }}" }
+     - { var: '__DEV_PASSWORD__', val: "{{ dev_pass_hash.stdout }}" }
+     - { var: '__DEV_NAME__', val: "Mr" }
+     - { var: '__DEV_SURNAME__', val: "{{ initial_developer }}" }
+     - { var: '__DEV_EMAIL__', val: "{{ initial_developer_email }}" }
+     - { var: '__JENKINS_PASSWORD__', val: "{{ dev_pass_hash.stdout }}" }
+     - { var: '__ADMIN_PASSWORD__', val: "{{ admin_pass_hash.stdout }}" }
+  when: marker.stat.exists != true
+
+
+- shell: ldapadd -x -D "cn=admin,dc={{ci_host_name}}" -w {{password_ldap}} -H ldap://{{ci_host_name}}:4000 -f /ansible-tmp/ldap/users.ldif && touch /ansible-tmp/ldap/users.ldif_imported
+  when: marker.stat.exists != true

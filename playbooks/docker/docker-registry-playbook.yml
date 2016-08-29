@@ -1,0 +1,70 @@
+---
+- name: docker registry certificates
+  shell: >
+    mkdir -p {{ci_host_schared_folder}}/docker-registry/certs
+    && mkdir -p {{ci_host_schared_folder}}/docker-registry/db
+    && openssl req -newkey rsa:4096 -nodes -sha256 -x509 -days 365 -subj '/CN={{ci_host_name}}' -keyout {{ci_host_schared_folder}}/docker-registry/certs/domain.key -out {{ci_host_schared_folder}}/docker-registry/certs/domain.crt
+  args:
+    creates: "{{ci_host_schared_folder}}/docker-registry/certs/domain.crt"
+- file: path=/etc/docker/certs.d/{{ci_host_name}}:5000/ state=directory
+- copy: src={{ci_host_schared_folder}}/docker-registry/certs/domain.crt dest=/etc/docker/certs.d/{{ci_host_name}}:5000/ca.crt
+- name: Docker Registry containers
+  docker_service:
+    project_name: docreg
+    definition:
+      version: '2'
+      services:
+        server:
+          image: registry:2
+          restart: always
+          ports:
+            - "5000:5000"
+          volumes:
+            - "{{ci_host_schared_folder}}/docker-registry/db:/var/lib/registry"
+            - "{{ci_host_schared_folder}}/docker-registry/certs:/certs"
+          environment:
+            - REGISTRY_HTTP_TLS_CERTIFICATE=/certs/domain.crt
+            - REGISTRY_HTTP_TLS_KEY=/certs/domain.key
+          extra_hosts:
+            - "{{ci_host_name}}:{{ci_host_ip}}"
+        ui:
+          image: hyper/docker-registry-web
+          restart: always
+          expose:
+            - 8080
+          ports:
+            - "5001:8080"
+          links:
+            - server:{{ci_host_name}}
+          environment:
+            - REGISTRY_URL=https://{{ci_host_name}}:5000/v2
+            - REGISTRY_TRUST_ANY_SSL=true
+            - REGISTRY_NAME={{ci_host_name}}:5000
+
+
+#- docker:
+#    restart_policy: always
+#    ports:
+#      - 5000:5000
+#    name: docker_registry
+#    volumes:
+#      - {{ci_host_schared_folder}}/docker-registry/db:/var/lib/registry
+#      - {{ci_host_schared_folder}}/docker-registry/certs:/certs
+#    image: registry:2
+#    env:
+#      REGISTRY_HTTP_TLS_CERTIFICATE: /certs/domain.crt
+#      REGISTRY_HTTP_TLS_KEY: /certs/domain.key
+#
+#- docker:
+#    restart_policy: always
+#    expose: 8080
+#    ports:
+#      - "5001:8080"
+#    name: docker_registry_web
+#    image: hyper/docker-registry-web
+#    links:
+#      - docker_registry:{{ci_host_name}}
+#    env:
+#      REGISTRY_URL: https://{{ci_host_name}}:5000/v2
+#      REGISTRY_TRUST_ANY_SSL: true
+#      REGISTRY_NAME: {{ci_host_name}}:5000

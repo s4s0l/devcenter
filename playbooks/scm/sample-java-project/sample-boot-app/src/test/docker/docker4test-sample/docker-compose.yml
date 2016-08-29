@@ -1,0 +1,20 @@
+version: '2'
+services:
+  web:
+    image: dockercloud/hello-world
+    ports:
+      - 38080:80
+  blog:
+    image: dockercloud/hello-world
+  lb:
+    image: dockercloud/haproxy
+    depends_on:
+      - web
+      - blog
+    environment:
+#    FUNNY THING if project dir contains '-' it has to be skipped here
+      - ADDITIONAL_SERVICES=docker4testsample:web,docker4testsample:blog
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 80

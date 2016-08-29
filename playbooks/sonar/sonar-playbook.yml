@@ -1,0 +1,35 @@
+---
+- file: path={{ci_host_schared_folder}}/sonar state=directory
+- file: path={{ci_host_schared_folder}}/sonar/data state=directory
+- file: path={{ci_host_schared_folder}}/sonar/extensions state=directory
+- template: src=/vagrant/playbooks/sonar/sonar.properties dest={{ci_host_schared_folder}}/sonar/sonar.properties  force=no
+
+
+- name: Sonar Cube containers up
+  docker_service:
+    project_name: sonar
+    build: yes
+    definition:
+      version: '2'
+      services:
+        server:
+          build:
+            context: /vagrant/playbooks/sonar/dockerization
+          restart: always
+          ports:
+            - "9000:9000"
+#            - "9092:9092"
+          volumes:
+            - "{{ci_host_schared_folder}}/sonar/data:/opt/sonarqube/data"
+            - "{{ci_host_schared_folder}}/sonar/extensions:/opt/sonarqube/extensions"
+            - "{{ci_host_schared_folder}}/sonar/sonar.properties:/opt/sonarqube/conf/sonar.properties"
+          extra_hosts:
+            - "{{ci_host_name}}:{{ci_host_ip}}"
+
+
+- name: Wait for sonar to fully start - it can take a while....
+  uri: url=http://localhost:9000 timeout=300 status_code=200 follow_redirects=yes
+  register: result
+  until: result['status'] == 200
+  retries: 60
+  delay: 5

@@ -1,0 +1,117 @@
+---
+- file: path={{ci_host_schared_folder}}/youtrack state=directory
+- file: path={{ci_host_schared_folder}}/youtrack/home state=directory
+- file: path={{ci_host_schared_folder}}/youtrack/db state=directory
+- file: path={{ci_host_schared_folder}}/youtrack/hub state=directory
+- name: Youtrack containers up
+  docker_service:
+    project_name: youtrack
+    build: yes
+    definition:
+      version: '2'
+      services:
+        server:
+          image: sasol/youtrack:latest
+          restart: always
+          ports:
+            - "10000:8080"
+#          volumes:
+#            - "{{ci_host_schared_folder}}/nexus/work:/sonatype-work"
+#            - "/ansible-tmp/mvnrepo/nexus_bootstrap:/nexus_bootstrap"
+          extra_hosts:
+            - "{{ci_host_name}}:{{ci_host_ip}}"
+
+- name: Wait for youtrack to open port
+  wait_for: port=10000 host=localhost connect_timeout=60 timeout=300
+
+- name: Wait for youtrack to fully start - it can take a while....
+  uri: url=http://localhost:10000/ timeout=300 status_code=302 follow_redirects=no
+  register: result
+  until: result['status'] == 302
+  retries: 60
+  delay: 5
+
+
+
+- name: Test login to youtrack
+  uri:
+    url: http://{{ ci_host_name }}:10000/rest/user/login
+    method: POST
+    return_content: yes
+    status_code: 200,403
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "login=root&password={{initial_admin_password}}"
+  register: youtrack_test
+
+
+- uri:
+    url: http://{{ ci_host_name }}:10000/rootGo
+    follow_redirects: none
+    method: GET
+    status_code: 302
+    HEADER_User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.82 Safari/537.36 OPR/39.0.2256.48
+    HEADER_Host: "{{ ci_host_name }}:10000"
+  register: youtrack_login
+  when: "youtrack_test['status'] == 403"
+  changed_when: youtrack_login.status == 302
+
+- uri:
+    url: http://{{ ci_host_name }}:10000/setUp
+    follow_redirects: none
+    method: GET
+    status_code: 200
+    HEADER_User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.82 Safari/537.36 OPR/39.0.2256.48
+    HEADER_Cookie: "YTSESSIONID={{youtrack_login.set_cookie[12:37]}}"
+    HEADER_Host: "{{ ci_host_name }}:10000"
+    dest: /ansible-tmp/youtrackSetUp.tmp
+  register: youtrack_setup
+  when: "youtrack_test['status'] == 403"
+  changed_when: youtrack_setup.status == 200
+
+
+
+- shell: "grep -o  '?window_id=[0-9]\\+' /ansible-tmp/youtrackSetUp.tmp"
+  register: window_id
+  when: "youtrack_test['status'] == 403"
+
+
+
+
+- name: Youtrack initial settings
+  uri:
+    url: http://{{ ci_host_name }}:10000/_events{{window_id.stdout}}
+    method: POST
+    return_content: yes
+    status_code: 200
+    HEADER_Cookie: "YTSESSIONID={{youtrack_login.set_cookie[12:37]}}"
+    HEADER_X-Requested-With: XMLHttpRequest
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "X-Requested-With=XMLHttpRequest\
+&http_session_id={{youtrack_login.set_cookie[12:37]}}\
+&event_=l.S.SetupContent.saveButton%3Aclick\
+&l.S.SetupContent.license.acceptLicenseAgreement=true\
+&l.S.SetupContent.license.username=YouTrack%20Default\
+&l.S.SetupContent.license.license=42bd2ce4dbaf8554bf082946a1c039d4384e81a99ed53fb75215c1b6ace8d34cf66889fdeee418cbe93d54f38f6e94a8a05a0108234b1955582d566283e3d084b23a0b8b52b016b0e610abcbbe7573fa3ff8fb3cdc9346dc94ef5f596f5b12719abcb02e6fae23d98f53f22a01788066aac7298b7fe79cc3dcd6f8df2fb41ab4\
+&l.S.SetupContent.system.baseUrl=http%3A%2F%2F{{ ci_host_name }}%3A10000\
+&l.S.SetupContent.rootPwd.rootPassword2={{initial_admin_password}}\
+&l.S.SetupContent.rootPwd.confirmRootPassword={{initial_admin_password}}\
+&l.S.SetupContent.ls.rtlEnabled=false\
+&l.S.SetupContent.shc.avshc=Default\
+&l.S.SetupContent.email.enableSmtp=false\
+&l.S.SetupContent.jabber.enableJabber=false\
+&__COMPONENT_SOURCE__=l.S.SetupContent.saveButton"
+  register: xxxx
+  when: "youtrack_test['status'] == 403"
+  changed_when: xxxx.status == 200
+
+
+- name: Test login to youtrack
+  uri:
+    url: http://{{ ci_host_name }}:10000/rest/user/login
+    method: POST
+    return_content: yes
+    status_code: 200
+    HEADER_Content-Type: "application/x-www-form-urlencoded"
+    body: "login=root&password={{initial_admin_password}}"
+  register: youtrack_test
+
