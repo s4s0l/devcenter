@@ -1,4 +1,5 @@
 FROM sonarqube:6.0-alpine
+
 RUN   apk update \
   &&   apk add ca-certificates wget \
   &&   update-ca-certificates

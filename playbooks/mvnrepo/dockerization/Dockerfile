@@ -4,6 +4,7 @@ RUN apk add --no-cache su-exec \
     && apk add --update curl \
     && apk add --update bash \
     && rm -rf /var/cache/apk/*
+
 ##########################################################
 # Install Nexus
 ##########################################################
