@@ -1,4 +1,5 @@
 FROM jenkins:2.7.2
+
 USER root
 ENV GOSU_VERSION 1.9
 RUN set -x \
